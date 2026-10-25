@@ -1,0 +1,343 @@
+@startuml
+
+' Подключаем стандартную библиотеку ArchiMate
+
+!include <archimate/Archimate>
+
+
+
+' Скрываем отображение текста <<стереотипов>> на диаграмме
+
+hide 
+stereotypes
+
+
+
+title 
+Архитектурная диаграмма системы «Электронная библиотека» (ArchiMate)
+
+
+
+skinparam
+Style 
+strictuml
+
+skinparam
+shadowing
+false
+
+
+
+' Настройка стиля для контейнеров слоев
+
+skinparam
+rectangle<<grouping>> {
+
+BackgroundColor
+#FFFFFF
+
+BorderStyle
+dashed
+
+BorderColor
+#A2A2A2
+
+}
+
+
+
+' Настройка стиля для серверов (Технологических узлов)
+
+skinparam
+node {
+
+BackgroundColor
+#C9E6CA
+
+BorderColor
+#62A866
+
+}
+
+
+
+' ==========================================
+
+' 1. БИЗНЕС-СЛОЙ (Business Layer)
+
+' ==========================================
+
+rectangle
+"Бизнес-слой" <<grouping>>
+as 
+business_layer {
+
+
+rectangle
+"Акторы" <<grouping>>
+as 
+actors_group {
+
+Business_Actor(BA_Reader,
+"Читатель")
+
+Business_Actor(BA_CM,
+"Контент-менеджер")
+
+Business_Actor(BA_Mod,
+"Модератор")
+
+Business_Actor(BA_Support,
+"Сотрудник техподдержки")
+
+}
+
+
+
+rectangle
+"Бизнес-процессы" <<grouping>>
+as 
+processes_group {
+
+Business_Process(BP_Read,
+"Поиск и чтение книг")
+
+Business_Process(BP_Import,
+"Импорт новых изданий")
+
+Business_Process(BP_Mod,
+"Модерация отзывов")
+
+Business_Process(BP_Support,
+"Решение проблем пользователей")
+
+}
+
+
+
+rectangle
+"Бизнес-сервисы" <<grouping>>
+as 
+services_group {
+
+Business_Service(BS_Library,
+"Сервис предоставления контента")
+
+Business_Service(BS_Catalog,
+"Сервис наполнения каталога")
+
+}
+
+}
+
+
+
+' ==========================================
+
+' 2. ПРИКЛАДНОЙ СЛОЙ (Application Layer)
+
+' ==========================================
+
+rectangle
+"Прикладной слой" <<grouping>>
+as 
+application_layer {
+
+Application_Component(AC_Kong,
+"API Gateway (Kong)")
+
+Application_Component(AC_Auth,
+"AuthNZ Service")
+
+Application_Component(AC_Catalog,
+"Catalog Service")
+
+Application_Component(AC_Storage,
+"Storage Service")
+
+Application_Component(AC_Keycloak,
+"Keycloak (IAM)")
+
+
+
+Application_Interface(AI_Auth,
+"Thrift / REST API Auth")
+
+Application_Interface(AI_Catalog,
+"REST API Catalog")
+
+Application_Interface(AI_Storage,
+"S3 API Storage")
+
+}
+
+
+
+' ==========================================
+
+' 3. ТЕХНОЛОГИЧЕСКИЙ СЛОЙ (Technology Layer)
+
+' ==========================================
+
+rectangle
+"Технологический слой" <<grouping>>
+as 
+technology_layer {
+
+
+node 
+"Сервер аутентификации"
+as 
+TN_AuthServer {
+
+Technology_SystemSoftware(TD_Redis,
+"Кэш Redis")
+
+Technology_SystemSoftware(TD_KeycloakDB,
+"БД Keycloak\n(PostgreSQL)")
+
+}
+
+
+node 
+"Сервер приложений каталога"
+as 
+TN_AppServer {
+
+Technology_SystemSoftware(TD_CatalogDB,
+"БД Каталога\n(PostgreSQL)")
+
+}
+
+
+node 
+"Инфраструктура хранения и очеверей"
+as 
+TN_Infra {
+
+Technology_SystemSoftware(TD_Minio,
+"Хранилище MinIO (S3)")
+
+Technology_CommunicationNetwork(TQ_Rabbit,
+"Брокер RabbitMQ")
+
+}
+
+
+node 
+"Внешний периметр"
+as 
+TN_External {
+
+Technology_SystemSoftware(TD_LDAP,
+"Корпоративный LDAP")
+
+}
+
+}
+
+
+
+' ==========================================
+
+' ВЗАИМОДЕЙСТВИЯ И СВЯЗИ (Relationships)
+
+' ==========================================
+
+
+
+' Связи внутри Бизнес-слоя
+
+BA_Reader
+--> 
+BP_Read
+
+BA_CM 
+--> BP_Import
+
+BA_Mod 
+--> BP_Mod
+
+BA_Support
+--> 
+BP_Support
+
+
+
+BP_Read 
+..> BS_Library
+
+BP_Import
+..> 
+BS_Catalog
+
+
+
+' Связи между Бизнес-слоем и Прикладным слоем
+
+BS_Library
+..> 
+AC_Kong
+
+BS_Catalog
+..> 
+AC_Kong
+
+
+
+AC_Kong 
+--> AI_Auth
+
+AI_Auth 
+--> AC_Auth
+
+
+
+AC_Auth 
+--> AC_Keycloak
+
+AC_Kong 
+--> AI_Catalog
+
+AI_Catalog
+--> 
+AC_Catalog
+
+AC_Catalog
+--> 
+AI_Storage
+
+AI_Storage
+--> 
+AC_Storage
+
+
+
+' Связи между Прикладным слоем и Технологическим слоем
+
+AC_Auth 
+..> TD_Redis
+
+AC_Keycloak
+..> 
+TD_KeycloakDB
+
+AC_Keycloak
+..> 
+TD_LDAP
+
+AC_Catalog
+..> 
+TD_CatalogDB
+
+AC_Storage
+..> 
+TD_Minio
+
+AC_Catalog
+..> 
+TQ_Rabbit
+
+
+
+@enduml
