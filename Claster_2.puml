@@ -1,0 +1,100 @@
+@startuml
+
+!theme spacelab
+
+title Архитектурная схема микросервисного кластера в Kubernetes (K8s)
+
+skinparam componentStyle uml2
+skinparam packageBackgroundColor white
+
+actor "Пользователь / Фронтенд" as Client
+
+' Внешний контур балансировки
+cloud "Internet / Corporate Network" {
+    [Внешний Балансировщик\n(Cloud LB / F5)] as ExternalLB
+}
+
+' Граница Kubernetes Кластера
+package "Kubernetes Cluster" #EFFAFF {
+
+    ' Системный ингресс-контур
+    package "Ingress Namespace" #GhostWhite {
+        component "Ingress Controller\n(Nginx / Traefik)" as Ingress
+        component "API Gateway\n(BFF / Kong)" as APIGW
+    }
+
+    ' Контур бизнес-логики (Показано распределение по Worker Nodes для HA)
+    package "Application Namespace" #F2FFF2 {
+
+        frame "Worker Node 1" #FFF9E6 {
+            package "Pod: Auth-Service-1" {
+                [Auth Service API] as Auth1
+            }
+            package "Pod: New-Feature-Service-1" #MediumSpringGreen {
+                [New Feature API] as New1
+                note right of New1: Наш новый микросервис
+            }
+        }
+
+        frame "Worker Node 2" #FFF9E6 {
+            package "Pod: Auth-Service-2" {
+                [Auth Service API] as Auth2
+            }
+            package "Pod: New-Feature-Service-2" #MediumSpringGreen {
+                [New Feature API] as New2
+            }
+        }
+
+        ' Абстракция K8s Services для балансировки внутри кластера
+        interface "K8s Service:\nauth-svc" as K8sAuthSvc
+        interface "K8s Service:\nnew-feature-svc" as K8sNewSvc
+    }
+
+    ' Контур очередей и кэша внутри K8s (или StatefulSet)
+    package "Infrastructure Namespace" #F7F7F7 {
+        queue "Kafka Cluster\n(Message Broker)" as Kafka
+        database "Redis Cluster\n(Cache/Session)" as Redis
+    }
+}
+
+' Контур хранения данных (Вынесен в отдельный отказоустойчивый кластер БД)
+package "Database Cluster (External / Dedicated)" #FFF0F0 {
+    database "PostgreSQL\n(Master)" as PG_Master
+    database "PostgreSQL\n(Replica)" as PG_Replica
+}
+
+' Потоки вызовов (Трафик)
+Client --> ExternalLB : HTTPS (443)
+ExternalLB --> Ingress : HTTP/gRPC
+
+' Маршрутизация Ingress -> API Gateway -> Внутренние K8s сервисы
+Ingress --> APIGW : Auth / Route
+APIGW --> K8sAuthSvc : /api/v1/auth
+APIGW --> K8sNewSvc : /api/v1/new-feature
+
+' Балансировка K8s Service между Подами на разных Нодах
+K8sAuthSvc --> Auth1
+K8sAuthSvc --> Auth2
+
+K8sNewSvc --> New1
+K8sNewSvc --> New2
+
+' Взаимодействие нового микросервиса с инфраструктурой
+New1 --> Redis : gRPC / RESP (Кэш)
+New2 --> Redis : gRPC / RESP
+
+New1 --> Kafka : AMQP / TCP (События)
+New2 --> Kafka : AMQP / TCP
+
+' Синхронные запросы между микросервисами через внутренний DNS
+New1 --> K8sAuthSvc : Проверка токена
+
+' Работа с БД
+New1 --> PG_Master : SQL (Запись)
+New2 --> PG_Master : SQL (Запись)
+Auth1 --> PG_Replica : SQL (Чтение)
+Auth2 --> PG_Replica : SQL (Чтение)
+
+PG_Master .right.> PG_Replica : Репликация
+
+@enduml

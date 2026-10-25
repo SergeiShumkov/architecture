@@ -1,0 +1,23 @@
+@startuml
+
+' Подключение встроенной библиотеки вместо URL
+!include <C4/C4_Container>
+
+TITLE Диаграмма контейнеров: Онлайн-магазин
+
+Person(customer, "Покупатель", "Клиент интернет-магазина")
+
+System_Boundary(shop_boundary, "Система интернет-магазина") {
+    Container(spa, "Single-Page Application", "React / TypeScript", "Предоставляет пользователю интерфейс витрины и корзины")
+    Container(api_service, "API Сервис", "Go / Clean Architecture", "Обрабатывает бизнес-логику заказов и каталога")
+    ContainerDb(database, "База данных", "PostgreSQL", "Хранит информацию о товарах, пользователях и заказах")
+}
+
+System_Ext(payment_gateway, "Платежный шлюз", "Внешняя платежная система")
+
+Rel(customer, spa, "Пользуется через браузер", "HTTPS")
+Rel(spa, api_service, "Вызывает API функции", "JSON/HTTPS")
+Rel(api_service, database, "Читает и записывает данные", "SQL/TCP")
+Rel(api_service, payment_gateway, "Проводит транзакции", "REST API")
+
+@enduml

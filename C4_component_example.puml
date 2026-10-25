@@ -1,0 +1,47 @@
+@startuml
+
+!include <C4/C4_Component>
+
+' Настройки отображения (слева направо)
+LAYOUT_LEFT_RIGHT()
+
+TITLE Схема обработки клиентов в ресторане
+
+' Главная система верхнего уровня
+System(restaurant_system, "Обработка клиентов в ресторане", "Software System\nDescription of software system.")
+
+' Граница системы обработки ожидания (Software System Boundary)
+System_Boundary(waiting_boundary, "Обработка ожидания") {
+
+    ' Блоки бизнес-процесса (сервисы)
+    Component(booking_service, "Сервис бронирования", "Бизнес-логика", "Обрабатывает входящий поток")
+    Component(waiting_list_service, "Сервис добавления в лист ожидания", "Бизнес-логика", "Управляет очередью")
+    Component(seating_service, "Сервис размещения клиента за столиком", "Бизнес-логика", "Координирует посадку")
+
+    ' Контейнеры и компоненты
+    Container(waiting_processing, "Обработка ожидания", "Spring Boot, ElasticSearch, etc.", "Description of container role/responsibility.")
+    Component(waiting_service_impl, "Waiting Service", "Spring Service", "Description of component role/responsibility.")
+    Component(table_service_impl, "Table Service", "Spring Service", "Description of component role/responsibility.")
+
+    ' Интерфейс в нижней части
+    Component(interface_node, "Interface", "UI / API", "Взаимодействие")
+}
+
+' Внешние или вынесенные компоненты справа
+Component(table_service_ext, "Table Service", "Spring Service", "Description of component role/responsibility.")
+Component(waiting_service_ext, "Waiting Service", "Spring Service", "Description of component role/responsibility.")
+
+' Описание связей и потоков данных
+Rel(booking_service, waiting_list_service, "Передает данные", "Событие")
+Rel(waiting_list_service, seating_service, "Посадить клиента за стол", "Событие")
+
+Rel(seating_service, table_service_impl, "Вызывает", "Internal")
+Rel(waiting_list_service, waiting_service_impl, "Вызывает", "Internal")
+
+' Связи между правыми компонентами
+Rel(table_service_ext, waiting_service_ext, "Makes API calls", "JSON/HTTP")
+
+' Связь интерфейса
+Rel(interface_node, waiting_list_service, "Использует", "Internal")
+
+@enduml

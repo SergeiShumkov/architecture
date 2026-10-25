@@ -1,0 +1,59 @@
+@startuml
+
+skinparam actorStyle awesome
+
+' Скрываем отображение текста <<стереотипов>> на диаграмме
+hide stereotypes
+
+skinparam rectangle {
+    BackgroundColor<<System>> #LightBlue
+    BorderColor<<System>> #DarkBlue
+}
+
+skinparam component {
+    BackgroundColor #LightGray
+    BorderColor #DarkGray
+}
+
+' Центральная система (Чёрный ящик)
+rectangle "Электронная библиотека" <<System>> as System
+
+' Внешние сущности: Пользователи (Актеры)
+actor "Контент-менеджер" as CM
+actor "Читатель" as Reader
+actor "Модератор" as Moderator
+actor "Сотрудник техподдержки" as Support
+
+' Внешние системы (Интеграции)
+component "Сервис уведомлений" as Notif
+component "Хранилище MinIO (S3)" as S3
+component "Keycloak (IAM)" as Keycloak
+
+' --- Взаимодействие с пользователями ---
+
+' Левая сторона (Контент-менеджер)
+CM -right-> System : ZIP-архивы с книгами
+System -left-> CM : Статус загрузки,\nметаданные книг
+
+' Правая сторона (Читатель)
+Reader -left-> System : Поисковый запрос,\nОтзыв, Оценка, Тикет
+System -right-> Reader : Результаты поиска, Карточка книги,\nВременная ссылка, Ответ поддержки,\nПодтверждение отзыва
+
+' Верхняя сторона (Модератор и Сервис уведомлений)
+Moderator -down-> System : Запрос на модерацию,\nРезультат модерации
+System -up-> Moderator : Список отзывов\nна модерацию
+System -up-> Notif : Уведомления
+
+' Нижняя сторона (Техподдержка)
+Support -up-> System : Запрос тикетов,\nОтвет на тикет
+System -down-> Support : Список тикетов
+
+' --- Интеграции и инфраструктура ---
+
+' Интеграция с Keycloak (Аутентификация / Авторизация)
+System .down.> Keycloak : Валидация JWT,\nсинхронизация пользователей
+
+' Интеграция с MinIO (Физическое хранение тяжелых файлов)
+System .right.> S3 : Загрузка файлов,\nзапрос временных ссылок
+
+@enduml

@@ -1,0 +1,41 @@
+@startuml
+
+skinparam actorStyle awesome
+
+' Скрываем отображение текста <<стереотипов>> на диаграмме
+hide stereotypes
+
+skinparam rectangle {
+    BackgroundColor<<System>> #LightBlue
+    BorderColor<<System>> #DarkBlue
+}
+
+' Центральная система
+rectangle "Электронная библиотека" <<System>> as System
+
+' Внешние сущности (разнесены по сторонам)
+actor "Контент-менеджер" as CM
+actor "Читатель" as Reader
+actor "Модератор" as Moderator
+actor "Сотрудник техподдержки" as Support
+
+component "Сервис уведомлений" as Notif
+
+' --- Левая сторона (Контент-менеджер) ---
+CM -right-> System : ZIP-архивы с книгами
+System -left-> CM : Статус загрузки,\nметаданные книг
+
+' --- Правая сторона (Читатель) ---
+Reader -left-> System : Поисковый запрос,\nОтзыв, Оценка, Тикет
+System -right-> Reader : Результаты поиска, Карточка книги,\nВременная ссылка, Ответ поддержки,\nПодтверждение отзыва
+
+' --- Верхняя сторона (Модератор и Сервис уведомлений) ---
+Moderator -down-> System : Запрос на модерацию,\nРезультат модерации
+System -up-> Moderator : Список отзывов\nна модерацию
+System -up-> Notif : Уведомления
+
+' --- Нижняя сторона (Техподдержка) ---
+Support -up-> System : Запрос тикетов,\nОтвет на тикет
+System -down-> Support : Список тикетов
+
+@enduml

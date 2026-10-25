@@ -1,0 +1,62 @@
+@startuml
+
+title «Скачивание книги»
+
+skinparam Style strictuml
+skinparam shadowing false
+skinparam DefaultFontName Arial
+skinparam ConditionEndStyle hline
+
+|API Gateway (Kong)|
+start
+:Получен запрос GET /read-link\nс JWT-токеном;
+:Отправить токен в Auth/Keycloak;
+
+if (Токен валиден?) then (Нет)
+  :Вернуть ошибку 401 Unauthorized;
+  stop
+else (Да)
+  :Перенаправить запрос в Catalog Service;
+endif
+
+|Catalog Service|
+if (У пользователя есть доступ?) then (Нет)
+
+  |API Gateway (Kong)|
+  :Вернуть ответ 403 Forbidden;
+  stop
+else (Да)
+
+  |Catalog Service|
+  :Запросить ссылку;
+endif
+
+|Storage Service|
+:Сгенерировать временную ссылку;
+:Вернуть URL;
+
+|Catalog Service|
+fork
+  :200 OK\n(Метаданные + URL);
+  
+  |API Gateway (Kong)|
+  :Передать ответ 200 OK Читателю;
+  :Читатель переходит по полученному URL;
+  
+  |MinIO (S3 Хранилище)|
+  :Получен прямой запрос GET по URL;
+  if (Проверка ссылки успешна?) then (Да)
+    :Отдать Файл книги;
+  else (Нет)
+    :Вернуть ошибку 403 AccessDenied;
+  endif
+  stop
+
+fork again
+
+  |RabbitMQ|
+  :Событие\n"Книга начала скачиваться";
+  stop
+end fork
+
+@enduml

@@ -1,0 +1,17 @@
+@startuml
+
+skinparam handwritten false
+skinparam monochrome true
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+
+class CatalogService {
+    - notificationServiceClient : NotificationHttpClient
+}
+
+class NotificationHttpClient {
+}
+
+CatalogService --> NotificationHttpClient : "Синхронный вызов API"
+
+@enduml

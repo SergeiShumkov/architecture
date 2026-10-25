@@ -1,0 +1,71 @@
+@startuml
+
+' Подключение встроенной библиотеки вместо URL
+!include <C4/C4_Container>
+
+' Скрываем отображение текста <<стереотипов>> на диаграмме
+hide stereotypes
+
+LAYOUT_WITH_LEGEND()
+
+' Пользователи
+Person(reader, "Читатель", "Ищет/скачивает книги, оставляет отзывы, создает тикеты")
+Person(content_manager, "Контент-менеджер", "Загружает ZIP-архивы и метаданные")
+Person(moderator, "Модератор", "Проверяет отзывы читателей")
+Person(support, "Сотрудник техподдержки", "Обрабатывает обращения")
+
+' Граница нашей системы
+System_Boundary(library, "Система 'Электронная библиотека'") {
+
+    Container(api_gateway, "API Gateway (Kong)", "Kong Lua / Плагины", "Единая точка входа. Маршрутизирует REST-запросы и делегирует проверку токенов в AuthNZ Service.")
+
+    ' АУТЕНТИФИКАЦИЯ (Синхронная)
+    Container(auth_service, "AuthNZ Service", "C# / Thrift Server", "Точка проверки токенов (/atprovider/at). Извлекает токен, проверяет кэш, запрашивает Keycloak.")
+    Container(keycloak, "Keycloak (IAM)", "", "Собственный сервер аутентификации. Генерирует JWT и аутентифицирует доменных пользователей через LDAP.")
+    ContainerDb(keycloak_db, "БД Keycloak", "PostgreSQL", "Хранит клиентов, роли и локальные учетные записи.")
+
+    ' БИЗНЕС-МИКРОСЕРВИСЫ
+    Container(catalog_service, "Catalog Service", "C#", "Управление каталогом книг, парсинг метаданных из архивов, обработка отзывов, оценок и тикетов.")
+    ContainerDb(catalog_db, "БД Каталога", "PostgreSQL", "Хранит метаданные книг, отзывы, оценки и обращения пользователей.")
+    Container(storage_service, "Storage Service", "C# / Node.js", "Управление файлами книг, выдача временных ссылок для скачивания, логирование.")
+
+    ' БРОКЕР СООБЩЕНИЙ (Асинхронные бизнес-события)
+    ContainerQueue(message_broker, "Брокер сообщений (RabbitMQ)", "RabbitMQ (AMQP)", "Обмен сообщениями. Связывает внутренние бизнес-сервисы и отправляет триггеры на уведомления.")
+
+    ' ИНФРАСТРУКТУРА ХРАНЕНИЯ
+    Container(minio, "Хранилище MinIO (S3)", "Собственное S3-совместимое объектное хранилище для физических файлов книг.")
+}
+
+' Внешние системы
+System_Ext(notification_service, "Сервис уведомлений", "Внешняя система для отправки push и email нотификаций пользователям.")
+ContainerDb_Ext(ldap_server, "Корпоративный каталог (LDAP)", "OpenLDAP / AD", "Собственное хранилище доменных пользователей для проверки учетных данных.")
+
+' --- Связи пользователей с системой ---
+Rel(reader, api_gateway, "REST-запросы (HTTPS / Синхронный)")
+Rel(content_manager, api_gateway, "REST-запросы (HTTPS / Синхронный)")
+Rel(moderator, api_gateway, "REST-запросы (HTTPS / Синхронный)")
+Rel(support, api_gateway, "REST-запросы (HTTPS / Синхронный)")
+
+' --- СИНХРОННЫЙ ФЛОУ АВТОРИЗАЦИИ: Kong -> AuthNZ -> Keycloak ---
+Rel(api_gateway, auth_service, "Запрос проверки токена (/atprovider/at)", "HTTP REST + Apache Thrift / Синхронный")
+Rel(auth_service, keycloak, "Обращение в Keycloak, если в кеше нет записи или она просрочена", "HTTP REST / Синхронный")
+Rel(keycloak, ldap_server, "Проверка доменных пользователей", "LDAP / Синхронный")
+Rel(keycloak, keycloak_db, "Чтение конфигурации и ролей", "SQL / Синхронный")
+
+' --- Маршрутизация от Kong к бизнес-сервисам ---
+Rel(api_gateway, catalog_service, "Маршрутизация", "HTTP REST / Синхронный")
+Rel(api_gateway, storage_service, "Маршрутизация", "HTTP REST / Синхронный")
+
+' --- Межсервисное взаимодействие повышенной скорости (если применимо) ---
+Rel(catalog_service, storage_service, "Запрос метаданных/ссылок файлов (при необходимости)", "HTTP REST + Apache Thrift / Синхронный")
+
+' Интеграция бизнес-сервисов с БД и MinIO
+Rel(catalog_service, catalog_db, "Чтение/запись метаданных, отзывов, тикетов", "SQL / Синхронный")
+Rel(storage_service, minio, "Сохраняет EPUB, запрашивает временные ссылки", "S3 API / Синхронный")
+
+' --- АСИНХРОННЫЕ ПОТОКИ БИЗНЕС-СВЯЗЕЙ (RabbitMQ) ---
+Rel(storage_service, message_broker, "Публикует событие 'Файл сохранен в MinIO'", "AMQP / Асинхронный")
+Rel(catalog_service, message_broker, "Публикует события 'Книга загружена', 'Создан тикет'", "AMQP / Асинхронный")
+Rel(message_broker, notification_service, "Отправляет триггеры для уведомления пользователей", "REST/Webhooks / Асинхронный")
+
+@enduml

@@ -1,0 +1,62 @@
+@startuml
+
+left to right direction
+
+skinparam Style strictuml
+skinparam shadowing false
+skinparam actorStyle Hollow
+
+' Настройка цветов 
+skinparam actor {
+    BackgroundColor #B8A642
+    BorderColor #B8A642
+}
+
+skinparam usecase {
+    BackgroundColor #D2E5FC
+    BorderColor #2F6CB2
+}
+
+' ==========================================
+' АКТОРЫ И СИСТЕМЫ
+' ==========================================
+actor "Читатель" as User_Reader
+actor "Контент-менеджер" as User_CM
+actor "Сотрудник техподдержки" as User_Support
+
+' ==========================================
+' ДИАГРАММА ВАРИАНТОВ ИСПОЛЬЗОВАНИЯ (5 сценариев)
+' ==========================================
+
+' 1 сценарий
+usecase "Зарегистрироваться\nв библиотеке" as UC_Reg
+
+' 2 сценарий
+usecase "Взять книгу\nв каталоге" as UC_TakeBook
+
+' 3 сценарий (включается через include)
+usecase "Проверить наличие\nправ доступа" as UC_CheckAuth
+
+' 4 сценарий
+usecase "Загрузить новое\nиздание" as UC_Upload
+
+' 5 сценарий
+usecase "Оформить тикет\nв поддержку" as UC_Ticket
+
+' ==========================================
+' СВЯЗИ И ВЗАИМОДЕЙСТВИЯ
+' ==========================================
+
+' Связи Читателя с основными сценариями
+User_Reader --> UC_Reg
+User_Reader --> UC_TakeBook
+User_Reader --> UC_Ticket
+
+' Связь со связью <<include>> (как на вашем примере карты и KYC)
+UC_TakeBook .right.> UC_CheckAuth : <<include>>
+
+' Взаимодействие других акторов со сценариями
+User_CM --> UC_Upload
+User_Support --> UC_Ticket
+
+@enduml

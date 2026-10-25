@@ -1,0 +1,103 @@
+@startuml
+
+title Диаграмма последовательности: Сценарий «Взятие и чтение книги»
+
+autonumber
+
+skinparam Style strictuml
+skinparam shadowing false
+skinparam actorStyle Hollow
+skinparam BoxPadding 10
+
+' ==========================================
+' УЧАСТНИКИ (Lifelines)
+' ==========================================
+
+actor "Читатель" as Reader
+participant "API Gateway\n(Kong)" as Kong
+participant "AuthNZ\nService" as Auth
+participant "Keycloak\n(IAM)" as Keycloak
+participant "Catalog\nService" as Catalog
+participant "Storage\nService" as Storage
+queue "RabbitMQ\n(Брокер)" as Rabbit
+database "MinIO\n(S3 Хранилище)" as Minio
+
+' ==========================================
+' НАЧАЛО СЦЕНАРИЯ
+' ==========================================
+
+Reader -> Kong : GET /api/v1/books/{id}/stream\n[Headers: Authorization: Bearer JWT]
+activate Kong
+
+' 1. Валидация токена
+Kong -> Auth : Проверить токен (JWT)
+activate Auth
+
+Auth -> Keycloak : Запрос активных claims / сессии
+activate Keycloak
+
+Keycloak --> Auth : Токен валиден, роли: [Reader]
+deactivate Keycloak
+
+Auth --> Kong : Авторизован (UserId: 123)
+deactivate Auth
+
+' 2. Проверка прав на книгу и получение метаданных
+Kong -> Catalog : Запрос на чтение книги (BookId, UserId)
+activate Catalog
+
+alt #LightCyan Успешный доступ к книге
+
+    ' 3. Получение защищенной ссылки на файл
+    Catalog -> Storage : Запрос временной ссылки (BookId)
+    activate Storage
+    
+    Storage -> Minio : Генерация временной ссылки на S3-объект
+    activate Minio
+    
+    Minio --> Storage : Временная ссылка
+    deactivate Minio
+    
+    Storage --> Catalog : Метаданные хранилища + URL
+    deactivate Storage
+
+    ' Асинхронная публикация события в брокер (без параллельного блока)
+    Catalog ->> Rabbit : Публикация бизнес-события "book.read.started"
+    
+    note over Rabbit: Событие обрабатывается\nсервисом статистики
+
+    ' Синхронный возврат контента пользователю
+    Catalog --> Kong : 200 OK (Метаданные книги + Presigned-URL)
+    deactivate Catalog
+    
+    Kong --> Reader : 200 OK (Поток данных книги)
+
+else #LightPink Нет прав доступа
+
+    activate Catalog
+    Catalog --> Kong : 403 Forbidden (Доступ ограничен)
+    deactivate Catalog
+    
+    Kong --> Reader : 403 Доступ к книге отклонен
+    deactivate Kong
+
+end
+
+' 4. Опциональный шаг: Читатель оставляет отзыв после прочтения
+opt Читатель решает написать отзыв в течение сессии
+
+    Reader -> Kong : POST /api/v1/books/{id}/reviews\n[Text: "Отличная книга!"]
+    activate Kong
+    
+    Kong -> Catalog : Сохранить отзыв пользователя
+    activate Catalog
+    
+    Catalog --> Kong : 201 Created (Отзыв сохранен)
+    deactivate Catalog
+    
+    Kong --> Reader : 201 Отзыв успешно опубликован
+    deactivate Kong
+
+end
+
+@enduml

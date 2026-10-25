@@ -1,0 +1,33 @@
+@startuml
+
+skinparam handwritten false
+skinparam monochrome true
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+
+class UserClient
+
+package "API Gateway (Proxy)" {
+    class ApiGatewayProxy {
+        - authService : AuthNZ
+        + RouteRequest()
+    }
+}
+
+package "Backend Services" {
+    class CatalogService {
+        + RouteRequest()
+        + GetBook()
+    }
+
+    class StorageService {
+        + RouteRequest()
+        + DownloadFile()
+    }
+}
+
+UserClient --> ApiGatewayProxy : "Все запросы идут сюда"
+ApiGatewayProxy --> CatalogService : "Проксирует проверенный запрос"
+ApiGatewayProxy --> StorageService : ""
+
+@enduml

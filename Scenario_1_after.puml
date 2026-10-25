@@ -1,0 +1,30 @@
+@startuml
+
+skinparam handwritten false
+skinparam monochrome true
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+
+package "Catalog Microservice" {
+    class CatalogService {
+        + CreateBook()
+    }
+}
+
+package "Broker" {
+    class Queue_BookCreated {
+        + Message
+    }
+    
+    CatalogService .down.> Queue_BookCreated : "Отправляет в"
+}
+
+package "Notification Microservice" {
+    class NotificationConsumer {
+        + OnMessageReceived()
+    }
+    
+    NotificationConsumer -up-> Queue_BookCreated : "Слушает (Наблюдатель)"
+}
+
+@enduml
